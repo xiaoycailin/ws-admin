@@ -96,7 +96,7 @@ io.on('connection', (socket) => {
             }
         }
         console.log(memberWins)
-        axios.post('https://admin-jgr-pools.com/ajax/balance_update', JSON.stringify(memberWins), {headers: {
+        axios.post('https://admin-jgr-pools.com/requests/balance_update', JSON.stringify(memberWins), {headers: {
             'X-REQUEST-FROM': 'nodejs',
         }}).then(re => {
             console.log(re.data)
