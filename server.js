@@ -77,8 +77,15 @@ io.on('connection', (socket) => {
             data.result.data.tableOfWins.digit2_bl.total_member +
             data.result.data.tableOfWins.digit2_dp.total_member
         db.query(`INSERT INTO results (number, type, resistance, total_place_bet, payout, total_data, total_member_win) VALUES ('${data.number}', '${data.type}', '${data.result.data.summary.resistance}', '${data.result.data.summary.totalAllPlaceBet}', '${data.result.data.summary.total_wins}', '${data.length}', '${totalmember}')`)
-
-        db.query(`UPDATE history SET status = 'Lose' WHERE type = 'place' AND place_type = '${data.type}' AND status = 'Queue' AND date BETWEEN DATE_SUB(NOW(), INTERVAL 24 HOUR) AND NOW()`)
+        
+        let queryUpdate = ''
+        if(data.type == 'fast') {
+            queryUpdate = `UPDATE history SET status = 'Lose' WHERE type = 'place' AND place_type = '${data.type}' AND status = 'Queue' AND date BETWEEN DATE_SUB(NOW(), INTERVAL 2 HOUR) AND NOW()`
+        }else {
+            queryUpdate = `UPDATE history SET status = 'Lose' WHERE type = 'place' AND place_type = '${data.type}' AND status = 'Queue' AND date BETWEEN DATE_SUB(NOW(), INTERVAL 24 HOUR) AND NOW()`
+        }
+        
+        db.query(queryUpdate)
         
         let memberWins = []
         const tabWins = data.result.data.tableOfWins
