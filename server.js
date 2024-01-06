@@ -10,9 +10,9 @@ const { default: axios } = require('axios')
 
 const db = mysql.createConnection({
     host: 'localhost',
-    user: 'jaguswby_userjaguar',
+    user: 'adminpoke_jgr_pools_u',
     password: 'Aiden2209#',
-    database: 'jaguswby_jaguar_pools'
+    database: 'adminpoke_jgr_pools'
 })
 db.connect(err => {
     if (err) {
