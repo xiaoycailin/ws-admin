@@ -9,11 +9,12 @@ const checkWiningManual = require('./checkWiningManual')
 const { default: axios } = require('axios')
 
 const db = mysql.createConnection({
-    host: 'localhost',
-    user: 'adminpoke_jgr_pools_u',
-    password: 'Aiden2209#',
+    host: '192.64.115.125',
+    user: 'aiden',
+    password: 'aiden',
     database: 'adminpoke_jgr_pools'
 })
+
 db.connect(err => {
     if (err) {
         console.error('Error connecting to MySQL:', err)
@@ -28,18 +29,88 @@ app.use(cors())
 
 const io = socketIo(server, {
     cors: {
-        origin: "https://admin-jgr-pools.com", // Sesuaikan dengan alamat aplikasi Anda
+        origin: "https://admin-jgr-pools.com",
         methods: ["GET", "POST"]
     }
 })
-
-app.get('/', (req, res) => {
-    res.status(403)
-    res.json({success:false, message: 'Forbiden'})
-})
-
 let taskFast
 let taskFull
+const startTaskFast = (type, cb) => {
+    if (!taskFast) {
+        db.query('SELECT * FROM config WHERE type = ?', type, (error, result) => {
+            if (result) {
+                // return cb(result[0].delay_after_show)
+                taskFast = cron.schedule(result[0].delay_after_show, () => {
+                    checkWinning(db, io, socket, result[0].show_value, result[0].resistance, taskFast, type)
+                })
+                taskFast.start()
+                io.emit('taskstatusfast', { task: true, message: result[0].delay_after_show })
+            }
+            cb('Task is Started')
+        })
+    } else {
+        cb('Task is Started')
+        io.emit('taskstatusfast', { task: true })
+    }
+}
+
+const startTaskFull = (type, cb) => {
+    if (!taskFull) {
+        db.query('SELECT * FROM config WHERE type = ?', type, (error, result) => {
+            if (result) {
+                taskFull = cron.schedule(result[0].delay_after_show, () => {
+                    checkWinning(db, io, socket, result[0].show_value, result[0].resistance, taskFull, type)
+                })
+                taskFull.start()
+                io.emit('taskstatusfull', { task: true, message: result[0].delay_after_show })
+            }
+        })
+    } else {
+        io.emit('taskstatusfull', { task: true })
+    }
+}
+const stopTask = (type, cb = () => {}) => {
+    if (type == 'fast') {
+        if (taskFast) {
+            taskFast.stop()
+            taskFast = null
+            io.emit('taskstatusfast', { task: false })
+        } else {
+            io.emit('taskstatusfast', { task: false })
+        }
+    } else {
+        if (taskFull) {
+            taskFull.stop()
+            taskFull = null
+            io.emit('taskstatusfull', { task: false })
+        } else {
+            io.emit('taskstatusfull', { task: false })
+        }
+    }
+}
+app.get('/', (req, res) => {
+    res.status(403)
+    res.json({ success: false, message: 'Forbiden' })
+})
+app.get('/startTask/fast', (req, res) => {
+    startTaskFast('fast', (message) => {
+        res.json({ success: true, message })
+    })
+})
+app.get('/startTask/full', (req, res) => {
+    startTaskFull('fast', (message) => {
+        res.json({ success: true, message })
+    })
+})
+app.get('/stopTask/fast', (req, res) => {
+    stopTask('fast')
+    res.json({ success: true, message: 'Succesfuly Stoped' })
+})
+app.get('/stopTask/full', (req, res) => {
+    stopTask('full')
+    res.json({ success: true, message: 'Succesfuly Stoped' })
+})
+
 // Mengatur koneksi socket.io
 io.on('connection', (socket) => {
     socket.on('checktaskfast', () => {
@@ -77,13 +148,13 @@ io.on('connection', (socket) => {
             data.result.data.tableOfWins.digit2_bl.total_member +
             data.result.data.tableOfWins.digit2_dp.total_member
         db.query(`INSERT INTO results (number, type, resistance, total_place_bet, payout, total_data, total_member_win) VALUES ('${data.number}', '${data.type}', '${data.result.data.summary.resistance}', '${data.result.data.summary.totalAllPlaceBet}', '${data.result.data.summary.total_wins}', '${data.length}', '${totalmember}')`)
-        
-        axios.get('https://admin-jgr-pools.com/update.php?type='+data.type).then(upd => {
+
+        axios.get('https://admin-jgr-pools.com/update.php?type=' + data.type).then(upd => {
             console.log(upd)
         }).catch(errs => {
             console.log(errs)
         })
-        
+
         let memberWins = []
         const tabWins = data.result.data.tableOfWins
         for (const key in tabWins) {
@@ -93,9 +164,11 @@ io.on('connection', (socket) => {
             }
         }
         console.log(memberWins)
-        axios.post('https://admin-jgr-pools.com/requests/balance_update', JSON.stringify(memberWins), {headers: {
-            'X-REQUEST-FROM': 'nodejs',
-        }}).then(re => {
+        axios.post('https://admin-jgr-pools.com/requests/balance_update', JSON.stringify(memberWins), {
+            headers: {
+                'X-REQUEST-FROM': 'nodejs',
+            }
+        }).then(re => {
             console.log(re.data)
             io.emit('doneupdate', re.data)
             io.emit('doneupdate', memberWins)
@@ -117,54 +190,13 @@ io.on('connection', (socket) => {
     // menjalankan task
     socket.on('startTask', (type) => {
         if (type == 'fast') {
-            if (!taskFast) {
-                db.query('SELECT * FROM config WHERE type = ?', type, (error, result) => {
-                    if (result) {
-                        taskFast = cron.schedule(result[0].delay_after_show, () => {
-                            checkWinning(db, io, socket, result[0].show_value, result[0].resistance, taskFast, type)
-                        })
-                        taskFast.start()
-                        io.emit('taskstatusfast', { task: true, message: result[0].delay_after_show })
-                    }
-                })
-            } else {
-                io.emit('taskstatusfast', { task: true })
-            }
+            startTaskFast('fast', () => {})
         } else {
-            if (!taskFull) {
-                db.query('SELECT * FROM config WHERE type = ?', type, (error, result) => {
-                    if (result) {
-                        taskFull = cron.schedule(result[0].delay_after_show, () => {
-                            checkWinning(db, io, socket, result[0].show_value, result[0].resistance, taskFull, type)
-                        })
-                        taskFull.start()
-                        io.emit('taskstatusfull', { task: true, message: result[0].delay_after_show })
-                    }
-                })
-            } else {
-                io.emit('taskstatusfull', { task: true })
-            }
+            startTaskFull('full', () => {})
         }
-
     })
     socket.on('stopTask', (type) => {
-        if (type == 'fast') {
-            if (taskFast) {
-                taskFast.stop()
-                taskFast = null
-                io.emit('taskstatusfast', { task: false })
-            } else {
-                io.emit('taskstatusfast', { task: false })
-            }
-        } else {
-            if (taskFull) {
-                taskFull.stop()
-                taskFull = null
-                io.emit('taskstatusfull', { task: false })
-            } else {
-                io.emit('taskstatusfull', { task: false })
-            }
-        }
+        stopTask(type)
     })
 })
 
